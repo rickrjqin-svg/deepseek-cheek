@@ -39,6 +39,16 @@ jobs:
             adb logcat -c
             adb shell am force-stop com.rickrjqin.deepseekbalance
             adb shell am start -W -n com.rickrjqin.deepseekbalance/.MainActivity
-            sleep 8
+            sleep 4
             test -n "$(adb shell pidof com.rickrjqin.deepseekbalance)"
+            adb shell input tap 950 330
+            sleep 3
+            test -n "$(adb shell pidof com.rickrjqin.deepseekbalance)"
+            adb exec-out screencap -p > android-16-settings.png
             ! adb logcat -d -b crash | grep -q "com.rickrjqin.deepseekbalance"
+      - name: Upload Android 16 screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-16-settings-preview
+          path: android-16-settings.png
