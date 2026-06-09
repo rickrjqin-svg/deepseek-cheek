@@ -1,4 +1,4 @@
-name: Android Launch Smoke Test
+name: Android 16 Launch Test
 
 on:
   push:
@@ -26,21 +26,19 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Install and launch on Android 15
+      - name: Cold launch on Android 16
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           arch: x86_64
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            adb logcat -c
             adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb logcat -c
+            adb shell am force-stop com.rickrjqin.deepseekbalance
             adb shell am start -W -n com.rickrjqin.deepseekbalance/.MainActivity
-            sleep 5
-            adb shell pidof com.rickrjqin.deepseekbalance
-            if adb logcat -d | grep -E "FATAL EXCEPTION|AndroidRuntime.*Process: com.rickrjqin.deepseekbalance"; then
-              adb logcat -d
-              exit 1
-            fi
+            sleep 8
+            test -n "$(adb shell pidof com.rickrjqin.deepseekbalance)"
+            ! adb logcat -d -b crash | grep -q "com.rickrjqin.deepseekbalance"

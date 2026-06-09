@@ -13,7 +13,6 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
@@ -27,7 +26,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public final class BalanceView extends View implements Choreographer.FrameCallback {
+public final class BalanceView extends View {
     interface Actions {
         void refresh();
         void settings();
@@ -71,14 +70,13 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
         paint.setTypeface(android.graphics.Typeface.create("sans", android.graphics.Typeface.NORMAL));
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeWidth(dp(1));
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         loadHistory();
-        Choreographer.getInstance().postFrameCallback(this);
     }
 
     void setLoading(boolean value) {
         loading = value;
         invalidate();
+        if (value) postInvalidateOnAnimation();
     }
 
     void setError(String message) {
@@ -91,18 +89,6 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
         error = "";
         saveSnapshot(value.total);
         invalidate();
-    }
-
-    @Override
-    public void doFrame(long frameTimeNanos) {
-        invalidate();
-        Choreographer.getInstance().postFrameCallback(this);
-    }
-
-    @Override
-    protected void onDetachedFromWindow() {
-        Choreographer.getInstance().removeFrameCallback(this);
-        super.onDetachedFromWindow();
     }
 
     @Override
@@ -195,6 +181,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
         glass(canvas, chart, dp(25), 36, false);
         drawChart(canvas, chart);
         canvas.restore();
+        if (loading) postInvalidateOnAnimation();
     }
 
     private void drawChart(Canvas c, RectF r) {
@@ -241,9 +228,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
             paint.setShader(new LinearGradient(0, bar.top, 0, bar.bottom,
                     Color.rgb(127, 208, 255), Color.rgb(55, 92, 238),
                     Shader.TileMode.CLAMP));
-            paint.setShadowLayer(dp(8), 0, dp(3), Color.argb(150, 58, 116, 255));
             c.drawRoundRect(bar, dp(7), dp(7), paint);
-            paint.clearShadowLayer();
             paint.setShader(null);
             text(c, labels[i], left + barW / 2, r.bottom - dp(10),
                     dp(10), Color.argb(205, 245, 250, 255), false, Paint.Align.CENTER);
@@ -281,9 +266,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
                 Color.argb(alpha + 8, 255, 255, 255),
                 Color.argb(Math.max(10, alpha - 17), 125, 215, 235),
                 Shader.TileMode.CLAMP));
-        if (outer) paint.setShadowLayer(dp(24), 0, dp(14), Color.argb(130, 0, 25, 50));
         c.drawRoundRect(r, radius, radius, paint);
-        paint.clearShadowLayer();
         paint.setShader(null);
         stroke.setColor(Color.argb(145, 255, 255, 255));
         stroke.setStrokeWidth(outer ? dp(1.4f) : dp(.8f));
@@ -293,10 +276,8 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
     private void drawLogo(Canvas c, float x, float y, float radius) {
         paint.setShader(new LinearGradient(x - radius, y - radius, x + radius, y + radius,
                 Color.rgb(61, 192, 255), Color.rgb(47, 91, 235), Shader.TileMode.CLAMP));
-        paint.setShadowLayer(dp(10), 0, dp(5), Color.argb(150, 18, 91, 235));
         c.drawRoundRect(new RectF(x - radius, y - radius, x + radius, y + radius),
                 dp(13), dp(13), paint);
-        paint.clearShadowLayer();
         paint.setShader(null);
         text(c, "D", x, y + dp(8), dp(24), Color.WHITE, true, Paint.Align.CENTER);
     }
@@ -304,10 +285,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
     private void drawOrb(Canvas c, float x, float y, float radius, int color) {
         paint.setShader(new RadialGradient(x - radius * .3f, y - radius * .4f, radius * 1.4f,
                 Color.WHITE, color, Shader.TileMode.CLAMP));
-        paint.setShadowLayer(dp(10), 0, dp(4), Color.argb(130, Color.red(color),
-                Color.green(color), Color.blue(color)));
         c.drawCircle(x, y, radius, paint);
-        paint.clearShadowLayer();
         paint.setShader(null);
         text(c, "◆", x, y + dp(7), dp(20), Color.WHITE, true, Paint.Align.CENTER);
     }
