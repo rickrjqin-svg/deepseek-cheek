@@ -4,11 +4,18 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -26,7 +33,16 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity implements BalanceView.Actions {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private BalanceView view;
+    private boolean requestInFlight;
+    private final Runnable scheduledRefresh = new Runnable() {
+        @Override
+        public void run() {
+            refresh();
+            scheduleNextRefresh();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle state) {
@@ -56,11 +72,13 @@ public class MainActivity extends Activity implements BalanceView.Actions {
 
     @Override
     public void refresh() {
+        if (requestInFlight) return;
         String key = SecureStore.get(this);
         if (key.isEmpty()) {
             showKeyDialog();
             return;
         }
+        requestInFlight = true;
         view.setLoading(true);
         executor.execute(() -> requestBalance(key));
     }
@@ -71,24 +89,58 @@ public class MainActivity extends Activity implements BalanceView.Actions {
     }
 
     private void showKeyDialog() {
+        float density = getResources().getDisplayMetrics().density;
+        int pad = Math.round(24 * density);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(pad, 0, pad, 0);
+
         EditText input = new EditText(this);
         input.setHint("sk-...");
         input.setText(SecureStore.get(this));
         input.setSelectAllOnFocus(true);
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        int pad = Math.round(24 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad / 2, pad, pad / 2);
+        input.setPadding(0, pad / 2, 0, pad / 2);
+        content.addView(input, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView intervalLabel = new TextView(this);
+        intervalLabel.setText("自动刷新");
+        intervalLabel.setTextSize(14);
+        intervalLabel.setPadding(0, pad / 2, 0, Math.round(6 * density));
+        content.addView(intervalLabel);
+
+        RadioGroup intervals = new RadioGroup(this);
+        long currentInterval = getPreferences(MODE_PRIVATE).getLong("refresh_interval", 0);
+        long[] intervalValues = {0, 30 * 60_000L, 60 * 60_000L, 2 * 60 * 60_000L};
+        String[] intervalLabels = {"关闭", "每 30 分钟", "每 1 小时", "每 2 小时"};
+        for (int i = 0; i < intervalLabels.length; i++) {
+            RadioButton option = new RadioButton(this);
+            option.setId(1000 + i);
+            option.setText(intervalLabels[i]);
+            option.setTag(intervalValues[i]);
+            intervals.addView(option);
+            if (intervalValues[i] == currentInterval) option.setChecked(true);
+        }
+        content.addView(intervals);
+
         new AlertDialog.Builder(this)
                 .setTitle("连接 DeepSeek")
-                .setMessage("API Key 仅在本机通过 Android Keystore 加密保存，不会上传到任何第三方服务器。")
-                .setView(input)
+                .setMessage("API Key 仅在本机加密保存。自动刷新仅在应用处于前台时运行。")
+                .setView(content)
                 .setNegativeButton("取消", null)
                 .setPositiveButton("保存并刷新", (dialog, which) -> {
                     String key = input.getText().toString().trim();
                     if (key.isEmpty()) return;
                     try {
                         SecureStore.put(this, key);
+                        RadioButton selected = intervals.findViewById(
+                                intervals.getCheckedRadioButtonId());
+                        long interval = selected == null ? 0 : (long) selected.getTag();
+                        getPreferences(MODE_PRIVATE).edit()
+                                .putLong("refresh_interval", interval).apply();
+                        scheduleNextRefresh();
                         refresh();
                     } catch (Exception e) {
                         Toast.makeText(this, "无法安全保存 Key", Toast.LENGTH_LONG).show();
@@ -130,17 +182,39 @@ public class MainActivity extends Activity implements BalanceView.Actions {
             runOnUiThread(() -> {
                 view.setBalance(balance);
                 view.setLoading(false);
+                requestInFlight = false;
             });
         } catch (Exception e) {
             String message = e.getMessage() == null ? "网络连接失败" : e.getMessage();
             runOnUiThread(() -> {
                 view.setLoading(false);
                 view.setError(message);
+                requestInFlight = false;
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show();
             });
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private void scheduleNextRefresh() {
+        refreshHandler.removeCallbacks(scheduledRefresh);
+        long interval = getPreferences(MODE_PRIVATE).getLong("refresh_interval", 0);
+        if (interval > 0 && !SecureStore.get(this).isEmpty()) {
+            refreshHandler.postDelayed(scheduledRefresh, interval);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        scheduleNextRefresh();
+    }
+
+    @Override
+    protected void onPause() {
+        refreshHandler.removeCallbacks(scheduledRefresh);
+        super.onPause();
     }
 
     private static String read(InputStream stream) throws Exception {
@@ -164,6 +238,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
 
     @Override
     protected void onDestroy() {
+        refreshHandler.removeCallbacksAndMessages(null);
         executor.shutdownNow();
         super.onDestroy();
     }

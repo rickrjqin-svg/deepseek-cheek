@@ -118,6 +118,10 @@ dialog form { padding: 14px 10px 8px; text-align: center; }
 .dialog-icon { width: 48px; height: 48px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 15px; background: linear-gradient(145deg, #57d7f8, #256fe8); }
 dialog h2 { margin: 0; } dialog p { color: #b7cbd5; font-size: 13px; line-height: 1.5; }
 dialog input { width: 100%; border: 1px solid #ffffff38; border-radius: 13px; padding: 13px; color: white; outline: 0; background: #061b248f; }
+dialog fieldset { margin: 14px 0 0; padding: 10px 12px 12px; text-align: left; border: 1px solid #ffffff27; border-radius: 14px; }
+dialog legend { padding: 0 6px; color: #bcd0da; font-size: 12px; }
+dialog label { display: flex; align-items: center; gap: 8px; padding: 7px 0; color: #e9f4f8; font-size: 13px; cursor: pointer; }
+dialog label input { width: 16px; height: 16px; margin: 0; accent-color: #49bff1; }
 dialog form > div:last-child { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 dialog button { border: 0; border-radius: 12px; padding: 11px; color: #d9e8ef; background: #ffffff10; cursor: pointer; }
 dialog .primary { color: #fff; background: linear-gradient(135deg, #287cf4, #2cb9e9); }

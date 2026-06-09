@@ -1,6 +1,8 @@
 name: Build Android APK
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       release:
@@ -33,15 +35,15 @@ jobs:
       - name: Build release APK
         run: gradle assembleRelease
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk DeepSeek-Balance-v1.0.0.apk
+        run: cp app/build/outputs/apk/release/app-release.apk DeepSeek-Balance-v1.1.0.apk
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Balance-APK
-          path: DeepSeek-Balance-v1.0.0.apk
+          path: DeepSeek-Balance-v1.1.0.apk
       - name: Publish GitHub Release
-        if: inputs.release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.1.0
-          files: DeepSeek-Balance-v1.0.0.apk
+          files: DeepSeek-Balance-v1.1.0.apk
           generate_release_notes: true
