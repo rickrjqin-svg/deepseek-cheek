@@ -1,8 +1,6 @@
 name: Android 16 Launch Test
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:

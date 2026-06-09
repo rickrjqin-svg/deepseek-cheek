@@ -161,20 +161,21 @@ public final class BalanceView extends View {
                 account.left + dp(16) + cardW, account.bottom - dp(14));
         RectF gift = new RectF(charge.right + gap, charge.top,
                 account.right - dp(16), charge.bottom);
-        miniCard(canvas, charge, "充值余额", balance == null ? "--" : money(balance.toppedUp, balance.currency),
+        miniCard(canvas, charge, "余额", balance == null ? "--" : money(balance.total, balance.currency),
                 Color.rgb(255, 203, 113));
-        miniCard(canvas, gift, "赠送余额", balance == null ? "--" : money(balance.granted, balance.currency),
+        miniCard(canvas, gift, "月度用量",
+                balance == null ? "--" : money(monthlyUsage(), balance.currency),
                 Color.rgb(123, 224, 255));
 
         float proTop = account.bottom + dp(12);
         RectF pro = new RectF(x, proTop, right, proTop + dp(68));
         modelCard(canvas, pro, "DeepSeek Pro", "等待统计数据", "-- Tokens",
-                .34f, Color.rgb(173, 77, 238), "✦");
+                .34f, Color.rgb(173, 77, 238), true);
 
         float flashTop = pro.bottom + dp(10);
         RectF flash = new RectF(x, flashTop, right, flashTop + dp(68));
         modelCard(canvas, flash, "DeepSeek Flash", "等待统计数据", "-- Tokens",
-                .78f, Color.rgb(65, 168, 255), "ϟ");
+                .78f, Color.rgb(65, 168, 255), false);
 
         float chartTop = flash.bottom + dp(12);
         RectF chart = new RectF(x, chartTop, right, shell.bottom - dp(24));
@@ -188,7 +189,7 @@ public final class BalanceView extends View {
         if (r.width() <= dp(80) || r.height() <= dp(90)) return;
         text(c, "▥  用量变化", r.left + dp(20), r.top + dp(36),
                 dp(18), WHITE, true, Paint.Align.LEFT);
-        text(c, "等待统计数据",
+        text(c, "本机余额快照",
                 r.right - dp(18), r.top + dp(36), dp(13),
                 Color.argb(190, 235, 246, 255), false, Paint.Align.RIGHT);
         float top = r.top + dp(62);
@@ -206,7 +207,7 @@ public final class BalanceView extends View {
             if (index < history.size()) {
                 Snapshot now = history.get(index);
                 Snapshot before = index > 0 ? history.get(index - 1) : now;
-                changes[i] = Math.abs(before.value - now.value);
+                changes[i] = Math.max(0, before.value - now.value);
                 labels[i] = now.label;
                 max = Math.max(max, changes[i]);
             } else {
@@ -247,11 +248,9 @@ public final class BalanceView extends View {
     }
 
     private void modelCard(Canvas c, RectF r, String name, String cost, String tokens,
-                           float ratio, int color, String symbol) {
+                           float ratio, int color, boolean neural) {
         glass(c, r, dp(20), 32, false);
-        drawOrb(c, r.left + dp(36), r.centerY(), dp(22), color);
-        text(c, symbol, r.left + dp(36), r.centerY() + dp(7), dp(18),
-                Color.WHITE, true, Paint.Align.CENTER);
+        drawModelIcon(c, r.left + dp(36), r.centerY(), dp(22), color, neural);
         text(c, name, r.left + dp(68), r.top + dp(27), dp(16),
                 WHITE, true, Paint.Align.LEFT);
         text(c, cost, r.right - dp(16), r.top + dp(27), dp(12),
@@ -279,15 +278,62 @@ public final class BalanceView extends View {
         c.drawRoundRect(new RectF(x - radius, y - radius, x + radius, y + radius),
                 dp(13), dp(13), paint);
         paint.setShader(null);
-        text(c, "D", x, y + dp(8), dp(24), Color.WHITE, true, Paint.Align.CENTER);
+
+        paint.setColor(Color.WHITE);
+        Path whale = new Path();
+        whale.moveTo(x - radius * .58f, y + radius * .05f);
+        whale.cubicTo(x - radius * .40f, y - radius * .47f,
+                x + radius * .22f, y - radius * .42f,
+                x + radius * .46f, y - radius * .06f);
+        whale.cubicTo(x + radius * .28f, y + radius * .42f,
+                x - radius * .30f, y + radius * .48f,
+                x - radius * .58f, y + radius * .05f);
+        c.drawPath(whale, paint);
+        Path tail = new Path();
+        tail.moveTo(x + radius * .37f, y - radius * .18f);
+        tail.lineTo(x + radius * .70f, y - radius * .42f);
+        tail.lineTo(x + radius * .60f, y - radius * .04f);
+        tail.lineTo(x + radius * .78f, y + radius * .22f);
+        tail.lineTo(x + radius * .39f, y + radius * .08f);
+        tail.close();
+        c.drawPath(tail, paint);
+        paint.setColor(Color.rgb(39, 119, 245));
+        c.drawCircle(x - radius * .28f, y - radius * .08f, dp(1.8f), paint);
     }
 
-    private void drawOrb(Canvas c, float x, float y, float radius, int color) {
+    private void drawModelIcon(Canvas c, float x, float y, float radius,
+                               int color, boolean neural) {
         paint.setShader(new RadialGradient(x - radius * .3f, y - radius * .4f, radius * 1.4f,
                 Color.WHITE, color, Shader.TileMode.CLAMP));
         c.drawCircle(x, y, radius, paint);
         paint.setShader(null);
-        text(c, "◆", x, y + dp(7), dp(20), Color.WHITE, true, Paint.Align.CENTER);
+        stroke.setColor(Color.WHITE);
+        stroke.setStrokeWidth(dp(1.6f));
+        stroke.setStrokeCap(Paint.Cap.ROUND);
+        paint.setColor(Color.WHITE);
+        if (neural) {
+            float[][] nodes = {
+                    {x - dp(9), y - dp(7)}, {x - dp(9), y + dp(7)},
+                    {x, y - dp(11)}, {x, y}, {x, y + dp(11)},
+                    {x + dp(9), y - dp(7)}, {x + dp(9), y + dp(7)}
+            };
+            int[][] links = {{0,2},{0,3},{1,3},{1,4},{2,5},{3,5},{3,6},{4,6}};
+            for (int[] link : links) {
+                c.drawLine(nodes[link[0]][0], nodes[link[0]][1],
+                        nodes[link[1]][0], nodes[link[1]][1], stroke);
+            }
+            for (float[] node : nodes) c.drawCircle(node[0], node[1], dp(2.4f), paint);
+        } else {
+            Path bolt = new Path();
+            bolt.moveTo(x + dp(3), y - dp(15));
+            bolt.lineTo(x - dp(8), y + dp(1));
+            bolt.lineTo(x - dp(1), y + dp(1));
+            bolt.lineTo(x - dp(4), y + dp(15));
+            bolt.lineTo(x + dp(10), y - dp(4));
+            bolt.lineTo(x + dp(3), y - dp(4));
+            bolt.close();
+            c.drawPath(bolt, paint);
+        }
     }
 
     private void drawRefresh(Canvas c, float x, float y, float time) {
@@ -334,6 +380,19 @@ public final class BalanceView extends View {
     private String money(double amount, String currency) {
         String symbol = "CNY".equals(currency) ? "¥" : currency + " ";
         return symbol + String.format(Locale.US, "%,.2f", amount);
+    }
+
+    private double monthlyUsage() {
+        String monthPrefix = new SimpleDateFormat("M/", Locale.CHINA).format(new Date());
+        double total = 0;
+        for (int i = 1; i < history.size(); i++) {
+            Snapshot before = history.get(i - 1);
+            Snapshot now = history.get(i);
+            if (now.label.startsWith(monthPrefix)) {
+                total += Math.max(0, before.value - now.value);
+            }
+        }
+        return total;
     }
 
     @Override
@@ -393,7 +452,7 @@ public final class BalanceView extends View {
         } else {
             history.add(new Snapshot(value, label));
         }
-        while (history.size() > 14) history.remove(0);
+        while (history.size() > 40) history.remove(0);
         JSONArray array = new JSONArray();
         try {
             for (Snapshot item : history) {

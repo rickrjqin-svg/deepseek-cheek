@@ -90,6 +90,13 @@ header { display: flex; align-items: center; justify-content: space-between; hei
 .model-orb { flex: 0 0 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: white; font-size: 22px; box-shadow: 0 8px 18px #102e6578, inset 0 1px #fff8; }
 .model-orb.pro { background: radial-gradient(circle at 32% 24%, #f3ceff, #a949e8 42%, #5530b8 85%); }
 .model-orb.flash { background: radial-gradient(circle at 32% 24%, #ecffff, #47d6ff 38%, #2774ee 85%); }
+.neural-icon i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: white; box-shadow: 0 0 5px #fff; }
+.neural-icon i:nth-child(1) { transform: translate(-10px,-8px); }
+.neural-icon i:nth-child(2) { transform: translate(9px,-9px); }
+.neural-icon i:nth-child(3) { transform: translate(0,0); }
+.neural-icon i:nth-child(4) { transform: translate(-9px,10px); }
+.neural-icon i:nth-child(5) { transform: translate(10px,9px); }
+.neural-icon::after { content:""; width: 27px; height: 24px; background: linear-gradient(34deg,transparent 47%,#fff 48% 52%,transparent 53%),linear-gradient(-34deg,transparent 47%,#fff 48% 52%,transparent 53%); opacity:.8; }
 .model-copy { min-width: 0; flex: 1; display: grid; gap: 5px; }
 .model-copy > div:first-child { display: flex; justify-content: space-between; align-items: center; }
 .model-copy strong { font-size: 14px; }
