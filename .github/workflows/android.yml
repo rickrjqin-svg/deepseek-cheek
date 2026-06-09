@@ -1,0 +1,43 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Create signing key
+        run: >
+          keytool -genkeypair -v -keystore app/release.keystore
+          -storepass deepseek-balance -alias deepseek -keypass deepseek-balance
+          -keyalg RSA -keysize 2048 -validity 10000
+          -dname "CN=DeepSeek Balance, OU=Mobile, O=rickrjqin-svg, L=Shanghai, C=CN"
+      - name: Build release APK
+        run: gradle assembleRelease
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk DeepSeek-Balance-v1.0.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeek-Balance-APK
+          path: DeepSeek-Balance-v1.0.0.apk
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DeepSeek-Balance-v1.0.0.apk
+          generate_release_notes: true
