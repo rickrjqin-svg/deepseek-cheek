@@ -129,13 +129,13 @@ public final class BalanceView extends View {
 
         float x = shell.left + dp(24);
         float right = shell.right - dp(24);
-        drawLogo(canvas, x + dp(22), shell.top + dp(46), dp(22));
-        text(canvas, "DeepSeek Balance", x + dp(58), shell.top + dp(55),
-                dp(25), WHITE, true, Paint.Align.LEFT);
-        drawRefresh(canvas, right - dp(50), shell.top + dp(46), t);
+        drawLogo(canvas, x + dp(19), shell.top + dp(46), dp(19));
+        text(canvas, "DeepSeek Balance", x + dp(47), shell.top + dp(52),
+                dp(18), WHITE, true, Paint.Align.LEFT);
+        drawRefresh(canvas, right - dp(38), shell.top + dp(46), t);
         drawSettings(canvas, right, shell.top + dp(46));
-        refreshHit.set(right - dp(76), shell.top + dp(18), right - dp(28), shell.top + dp(72));
-        settingsHit.set(right - dp(24), shell.top + dp(18), right + dp(24), shell.top + dp(72));
+        refreshHit.set(right - dp(59), shell.top + dp(20), right - dp(18), shell.top + dp(70));
+        settingsHit.set(right - dp(18), shell.top + dp(20), right + dp(20), shell.top + dp(70));
 
         float accountTop = shell.top + dp(92);
         RectF account = new RectF(x, accountTop, right, accountTop + dp(205));
