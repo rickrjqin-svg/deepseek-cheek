@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSeek Balance Preview</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="stage">
+    <section class="intro">
+      <div class="app-icon" aria-label="DeepSeek Balance icon">
+        <span class="whale">D</span><span class="spark">✦</span>
+      </div>
+      <p>ANDROID APP · INTERACTIVE PREVIEW</p>
+      <h1>DeepSeek Balance</h1>
+      <span>点击刷新与设置按钮，可以体验最终版的动效和弹窗。</span>
+    </section>
+
+    <section class="phone">
+      <div class="island"></div>
+      <div class="screen">
+        <div class="aurora a"></div><div class="aurora b"></div>
+        <article class="shell glass">
+          <header>
+            <div class="brand">
+              <div class="small-icon"><b>D</b><i>✦</i></div>
+              <strong>DeepSeek Balance</strong>
+            </div>
+            <div class="actions">
+              <button id="refresh" aria-label="刷新">↻</button>
+              <button id="settings" aria-label="设置">⚙</button>
+            </div>
+          </header>
+
+          <section class="balance-card glass">
+            <div class="eyebrow"><span>▰&nbsp; 账户余额</span><em>●&nbsp; 可用</em></div>
+            <div class="amount">¥927.23</div>
+            <div class="mini-grid">
+              <div class="mini"><span>充值余额</span><b>¥768.35</b></div>
+              <div class="mini"><span>赠送余额</span><b>¥158.88</b></div>
+            </div>
+          </section>
+
+          <section class="model-card glass">
+            <div class="model-orb pro">✦</div>
+            <div class="model-copy">
+              <div><strong>DeepSeek Pro</strong><b>¥18.46</b></div>
+              <span>38,429,680 Tokens</span>
+              <div class="progress pro-progress"><i></i></div>
+            </div>
+          </section>
+
+          <section class="model-card glass">
+            <div class="model-orb flash">ϟ</div>
+            <div class="model-copy">
+              <div><strong>DeepSeek Flash</strong><b>¥6.91</b></div>
+              <span>126,803,240 Tokens</span>
+              <div class="progress flash-progress"><i></i></div>
+            </div>
+          </section>
+
+          <section class="chart-card glass">
+            <div class="chart-title"><strong>▥&nbsp; 用量变化</strong><span>合计 417M Tokens</span></div>
+            <div class="chart">
+              <div style="--h:28%"><em>35M</em><i></i><small>6/3</small></div>
+              <div style="--h:44%"><em>41M</em><i></i><small>6/4</small></div>
+              <div style="--h:65%"><em>125M</em><i></i><small>6/5</small></div>
+              <div style="--h:36%"><em>38M</em><i></i><small>6/6</small></div>
+              <div style="--h:82%"><em>137M</em><i></i><small>6/7</small></div>
+              <div style="--h:48%"><em>33M</em><i></i><small>6/8</small></div>
+              <div style="--h:18%"><em>8M</em><i></i><small>6/9</small></div>
+            </div>
+          </section>
+          <span class="demo-note">用量为界面演示数据</span>
+          <div class="home-indicator"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="keyDialog">
+    <form method="dialog">
+      <div class="dialog-icon">✦</div>
+      <h2>连接 DeepSeek</h2>
+      <p>API Key 仅通过 Android Keystore 加密保存在设备本地。</p>
+      <input type="password" placeholder="sk-••••••••••••" value="sk-preview-demo">
+      <div><button value="cancel">取消</button><button class="primary" value="save">保存并刷新</button></div>
+    </form>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

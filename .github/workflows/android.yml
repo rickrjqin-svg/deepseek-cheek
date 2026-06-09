@@ -1,10 +1,13 @@
 name: Build Android APK
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub Release"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,8 +39,9 @@ jobs:
           name: DeepSeek-Balance-APK
           path: DeepSeek-Balance-v1.0.0.apk
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: inputs.release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.1.0
           files: DeepSeek-Balance-v1.0.0.apk
           generate_release_notes: true

@@ -60,6 +60,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
     private Balance balance;
     private long startTime = System.nanoTime();
     private float pressedScale = 1f;
+    private float layoutScale = 1f;
     private boolean loading;
     private String error = "";
 
@@ -109,6 +110,10 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
         super.onDraw(canvas);
         float w = getWidth();
         float h = getHeight();
+        if (w <= 0 || h <= 0) return;
+        layoutScale = Math.min(1f, Math.min(
+                w / (390f * density),
+                h / (844f * density)));
         float t = (System.nanoTime() - startTime) / 1_000_000_000f;
 
         paint.setShader(new LinearGradient(0, 0, w, h,
@@ -175,22 +180,17 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
         miniCard(canvas, gift, "赠送余额", balance == null ? "--" : money(balance.granted, balance.currency),
                 Color.rgb(123, 224, 255));
 
-        float splitTop = account.bottom + dp(16);
-        RectF split = new RectF(x, splitTop, right, splitTop + dp(88));
-        glass(canvas, split, dp(23), 34, false);
-        drawOrb(canvas, split.left + dp(43), split.centerY(), dp(27), Color.rgb(65, 168, 255));
-        text(canvas, "余额构成", split.left + dp(80), split.top + dp(34),
-                dp(20), WHITE, true, Paint.Align.LEFT);
-        double total = balance == null ? 0 : Math.max(.0001, balance.total);
-        double paidRatio = balance == null ? .62 : balance.toppedUp / total;
-        text(canvas, String.format(Locale.CHINA, "充值 %.0f%%  ·  赠送 %.0f%%",
-                        paidRatio * 100, (1 - paidRatio) * 100),
-                split.left + dp(80), split.top + dp(62), dp(13),
-                Color.argb(190, 235, 246, 255), false, Paint.Align.LEFT);
-        drawProgress(canvas, split.left + dp(80), split.bottom - dp(13),
-                split.right - dp(18), (float) paidRatio);
+        float proTop = account.bottom + dp(12);
+        RectF pro = new RectF(x, proTop, right, proTop + dp(68));
+        modelCard(canvas, pro, "DeepSeek Pro", "等待统计数据", "-- Tokens",
+                .34f, Color.rgb(173, 77, 238), "✦");
 
-        float chartTop = split.bottom + dp(16);
+        float flashTop = pro.bottom + dp(10);
+        RectF flash = new RectF(x, flashTop, right, flashTop + dp(68));
+        modelCard(canvas, flash, "DeepSeek Flash", "等待统计数据", "-- Tokens",
+                .78f, Color.rgb(65, 168, 255), "ϟ");
+
+        float chartTop = flash.bottom + dp(12);
         RectF chart = new RectF(x, chartTop, right, shell.bottom - dp(24));
         glass(canvas, chart, dp(25), 36, false);
         drawChart(canvas, chart);
@@ -198,9 +198,10 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
     }
 
     private void drawChart(Canvas c, RectF r) {
-        text(c, "▥  余额变化", r.left + dp(20), r.top + dp(36),
+        if (r.width() <= dp(80) || r.height() <= dp(90)) return;
+        text(c, "▥  用量变化", r.left + dp(20), r.top + dp(36),
                 dp(18), WHITE, true, Paint.Align.LEFT);
-        text(c, history.size() < 2 ? "刷新后开始记录" : "最近 7 次快照",
+        text(c, "等待统计数据",
                 r.right - dp(18), r.top + dp(36), dp(13),
                 Color.argb(190, 235, 246, 255), false, Paint.Align.RIGHT);
         float top = r.top + dp(62);
@@ -258,6 +259,21 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
                 Color.argb(210, 245, 250, 255), false, Paint.Align.LEFT);
         text(c, value, r.left + dp(16), r.bottom - dp(15), dp(21),
                 color, true, Paint.Align.LEFT);
+    }
+
+    private void modelCard(Canvas c, RectF r, String name, String cost, String tokens,
+                           float ratio, int color, String symbol) {
+        glass(c, r, dp(20), 32, false);
+        drawOrb(c, r.left + dp(36), r.centerY(), dp(22), color);
+        text(c, symbol, r.left + dp(36), r.centerY() + dp(7), dp(18),
+                Color.WHITE, true, Paint.Align.CENTER);
+        text(c, name, r.left + dp(68), r.top + dp(27), dp(16),
+                WHITE, true, Paint.Align.LEFT);
+        text(c, cost, r.right - dp(16), r.top + dp(27), dp(12),
+                Color.argb(210, 245, 250, 255), false, Paint.Align.RIGHT);
+        text(c, tokens, r.left + dp(68), r.top + dp(48), dp(11),
+                Color.argb(190, 235, 246, 255), false, Paint.Align.LEFT);
+        drawProgress(c, r.left + dp(68), r.bottom - dp(10), r.right - dp(16), ratio);
     }
 
     private void glass(Canvas c, RectF r, float radius, int alpha, boolean outer) {
@@ -414,7 +430,7 @@ public final class BalanceView extends View implements Choreographer.FrameCallba
     }
 
     private float dp(float value) {
-        return value * density;
+        return value * density * layoutScale;
     }
 
     private static final class Snapshot {
