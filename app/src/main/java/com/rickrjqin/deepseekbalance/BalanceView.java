@@ -164,7 +164,8 @@ public final class BalanceView extends View {
         miniCard(canvas, charge, "赠送额度", balance == null ? "--" : money(balance.granted, balance.currency),
                 Color.rgb(255, 203, 113));
         miniCard(canvas, gift, "月度用量",
-                balance == null ? "--" : money(monthlyUsage(), balance.currency),
+                monthlyUsage() <= 0 && balance == null ? "--"
+                        : money(monthlyUsage(), balance == null ? "CNY" : balance.currency),
                 Color.rgb(123, 224, 255));
 
         UsageStats proUsage = usageStats("pro");
@@ -207,19 +208,32 @@ public final class BalanceView extends View {
         double max = .01;
         double[] changes = new double[count];
         String[] labels = new String[count];
+        UsageStats proUsage = usageStats("pro");
+        UsageStats flashUsage = usageStats("flash");
+        double consoleTokens = proUsage.tokens + flashUsage.tokens;
+        if (consoleTokens > 0) {
+            long nowMs = System.currentTimeMillis();
+            for (int i = 0; i < count; i++) {
+                Date day = new Date(nowMs - (long) (count - 1 - i) * 24L * 60L * 60L * 1000L);
+                labels[i] = new SimpleDateFormat("M/d", Locale.CHINA).format(day);
+                changes[i] = i == count - 1 ? consoleTokens : 0;
+                max = Math.max(max, changes[i]);
+            }
+        } else {
         int offset = Math.max(0, history.size() - count);
         for (int i = 0; i < count; i++) {
             int index = offset + i;
             if (index < history.size()) {
                 Snapshot now = history.get(index);
                 Snapshot before = index > 0 ? history.get(index - 1) : now;
-                changes[i] = Math.max(0, before.value - now.value);
+                changes[i] = Math.max(0, before.value - now.value) * 1_000_000d;
                 labels[i] = now.label;
                 max = Math.max(max, changes[i]);
             } else {
                 changes[i] = 0;
                 labels[i] = "·";
             }
+        }
         }
         for (int i = 1; i <= 2; i++) {
             stroke.setColor(Color.argb(35, 255, 255, 255));
@@ -412,10 +426,9 @@ public final class BalanceView extends View {
     }
 
     private String tokenAxisValue(double value) {
-        double tokens = value * 1_000_000d;
-        if (tokens >= 1_000_000) return String.format(Locale.US, "%.0fM", tokens / 1_000_000d);
-        if (tokens >= 1_000) return String.format(Locale.US, "%.0fK", tokens / 1_000d);
-        return String.format(Locale.US, "%.0f", tokens);
+        if (value >= 1_000_000) return String.format(Locale.US, "%.0fM", value / 1_000_000d);
+        if (value >= 1_000) return String.format(Locale.US, "%.0fK", value / 1_000d);
+        return String.format(Locale.US, "%.0f", value);
     }
 
     private UsageStats usageStats(String key) {
@@ -426,6 +439,10 @@ public final class BalanceView extends View {
     }
 
     private double monthlyUsage() {
+        UsageStats proUsage = usageStats("pro");
+        UsageStats flashUsage = usageStats("flash");
+        double consoleCost = proUsage.cost + flashUsage.cost;
+        if (consoleCost > 0) return consoleCost;
         String monthPrefix = new SimpleDateFormat("M/", Locale.CHINA).format(new Date());
         double total = 0;
         for (int i = 1; i < history.size(); i++) {

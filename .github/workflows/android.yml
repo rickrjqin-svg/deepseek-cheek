@@ -35,15 +35,15 @@ jobs:
       - name: Build release APK
         run: gradle assembleRelease
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk DeepSeek-Balance-v1.2.1.apk
+        run: cp app/build/outputs/apk/release/app-release.apk DeepSeek-Balance-v1.2.2.apk
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Balance-APK
-          path: DeepSeek-Balance-v1.2.1.apk
+          path: DeepSeek-Balance-v1.2.2.apk
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.1
-          files: DeepSeek-Balance-v1.2.1.apk
+          tag_name: v1.2.2
+          files: DeepSeek-Balance-v1.2.2.apk
           generate_release_notes: true

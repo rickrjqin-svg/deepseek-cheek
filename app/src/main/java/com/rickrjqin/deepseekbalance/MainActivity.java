@@ -13,6 +13,9 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -57,7 +60,8 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         window.setNavigationBarColor(Color.rgb(8, 25, 35));
         view = new BalanceView(this, this);
         setContentView(view);
-        if (!SecureStore.get(this).isEmpty()) {
+        if (!SecureStore.get(this).isEmpty()
+                || !SecureStore.get(this, "platform_cookie").isEmpty()) {
             view.postDelayed(this::refresh, 420);
         }
     }
@@ -66,13 +70,18 @@ public class MainActivity extends Activity implements BalanceView.Actions {
     public void refresh() {
         if (requestInFlight) return;
         String key = SecureStore.get(this);
-        if (key.isEmpty()) {
+        String cookie = SecureStore.get(this, "platform_cookie");
+        if (key.isEmpty() && cookie.isEmpty()) {
             showKeyDialog();
             return;
         }
         requestInFlight = true;
         view.setLoading(true);
-        executor.execute(() -> requestBalance(key));
+        if (key.isEmpty()) {
+            executor.execute(() -> requestConsoleOnly(cookie));
+        } else {
+            executor.execute(() -> requestBalance(key));
+        }
     }
 
     @Override
@@ -124,7 +133,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         content.addView(message);
 
         EditText input = new EditText(this);
-        input.setHint("sk-...");
+        input.setHint("sk-...（可选）");
         input.setHintTextColor(Color.rgb(112, 145, 157));
         input.setTextColor(white);
         input.setTextSize(14);
@@ -135,6 +144,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         input.setPadding(dp(14), 0, dp(14), 0);
         input.setBackground(roundBackground(Color.rgb(8, 37, 48),
                 Color.rgb(54, 91, 104), dp(13), 1));
+        input.setVisibility(EditText.GONE);
         content.addView(input, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
@@ -143,6 +153,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         cookieLabel.setTextColor(muted);
         cookieLabel.setTextSize(12);
         cookieLabel.setPadding(0, dp(14), 0, dp(6));
+        cookieLabel.setVisibility(TextView.GONE);
         content.addView(cookieLabel);
 
         EditText cookieInput = new EditText(this);
@@ -158,8 +169,17 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         cookieInput.setPadding(dp(14), dp(8), dp(14), dp(8));
         cookieInput.setBackground(roundBackground(Color.rgb(8, 37, 48),
                 Color.rgb(54, 91, 104), dp(13), 1));
+        cookieInput.setVisibility(EditText.GONE);
         content.addView(cookieInput, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(74)));
+
+        Button login = dialogButton(SecureStore.get(this, "platform_cookie").isEmpty()
+                ? "登录 DeepSeek 账户" : "已登录 DeepSeek，重新登录",
+                Color.rgb(36, 105, 132), white);
+        LinearLayout.LayoutParams loginParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        loginParams.topMargin = dp(14);
+        content.addView(login, loginParams);
 
         LinearLayout intervalPanel = new LinearLayout(this);
         intervalPanel.setOrientation(LinearLayout.VERTICAL);
@@ -217,16 +237,21 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         saveParams.leftMargin = dp(6);
         buttons.addView(save, saveParams);
 
+        login.setOnClickListener(v -> showDeepSeekLoginDialog(() -> {
+            login.setText("已登录 DeepSeek，重新登录");
+            scheduleNextRefresh();
+            refresh();
+        }));
         cancel.setOnClickListener(v -> dialog.dismiss());
         save.setOnClickListener(v -> {
             String key = input.getText().toString().trim();
-            if (key.isEmpty()) {
+            if (key.isEmpty() && SecureStore.get(this, "platform_cookie").isEmpty()) {
+                Toast.makeText(this, "请先登录 DeepSeek 账户", Toast.LENGTH_LONG).show();
                 input.setError("请输入 API Key");
                 return;
             }
             try {
-                SecureStore.put(this, key);
-                SecureStore.put(this, "platform_cookie", cookieInput.getText().toString().trim());
+                if (!key.isEmpty()) SecureStore.put(this, key);
                 RadioButton selected = intervals.findViewById(
                         intervals.getCheckedRadioButtonId());
                 long interval = selected == null ? 0 : (long) selected.getTag();
@@ -297,6 +322,86 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private void showDeepSeekLoginDialog(Runnable onSaved) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(10), dp(10), dp(10), dp(10));
+        content.setBackground(panelBackground());
+
+        TextView title = new TextView(this);
+        title.setText("登录 DeepSeek 账户");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(18);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, dp(8), 0, dp(8));
+        content.addView(title);
+
+        WebView webView = new WebView(this);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl("https://platform.deepseek.com/usage");
+        content.addView(webView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams buttonsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        buttonsParams.topMargin = dp(10);
+        content.addView(buttons, buttonsParams);
+
+        Button cancel = dialogButton("取消", Color.rgb(34, 70, 83), Color.WHITE);
+        Button done = dialogButton("完成登录", Color.rgb(72, 195, 240), Color.WHITE);
+        buttons.addView(cancel, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        LinearLayout.LayoutParams doneParams = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        doneParams.leftMargin = dp(8);
+        buttons.addView(done, doneParams);
+
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        done.setOnClickListener(v -> {
+            try {
+                CookieManager.getInstance().flush();
+                String cookie = CookieManager.getInstance()
+                        .getCookie("https://platform.deepseek.com");
+                if (cookie == null || cookie.trim().isEmpty()) {
+                    Toast.makeText(this, "还没有检测到登录态，请先完成登录", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                SecureStore.put(this, "platform_cookie", cookie);
+                dialog.dismiss();
+                Toast.makeText(this, "DeepSeek 登录态已保存", Toast.LENGTH_SHORT).show();
+                onSaved.run();
+            } catch (Exception e) {
+                Toast.makeText(this, "无法保存登录态", Toast.LENGTH_LONG).show();
+            }
+        });
+
+        dialog.setContentView(content);
+        Window dialogWindow = dialog.getWindow();
+        if (dialogWindow != null) {
+            dialogWindow.setBackgroundDrawableResource(android.R.color.transparent);
+            WindowManager.LayoutParams params = dialogWindow.getAttributes();
+            params.width = getResources().getDisplayMetrics().widthPixels - dp(22);
+            params.height = getResources().getDisplayMetrics().heightPixels - dp(72);
+            dialogWindow.setAttributes(params);
+        }
+        dialog.show();
+        if (dialogWindow != null) {
+            dialogWindow.setLayout(
+                    getResources().getDisplayMetrics().widthPixels - dp(22),
+                    getResources().getDisplayMetrics().heightPixels - dp(72));
+        }
+    }
+
     private void requestBalance(String key) {
         HttpURLConnection connection = null;
         try {
@@ -348,6 +453,53 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         }
     }
 
+    private void requestConsoleOnly(String cookie) {
+        try {
+            requestConsoleUsage(cookie);
+            BalanceView.Balance balance = requestConsoleBalance(cookie);
+            runOnUiThread(() -> {
+                if (balance != null) view.setBalance(balance);
+                view.setLoading(false);
+                requestInFlight = false;
+                view.invalidate();
+            });
+        } catch (Exception e) {
+            runOnUiThread(() -> {
+                view.setLoading(false);
+                view.setError("DeepSeek 登录态已失效，请重新登录");
+                requestInFlight = false;
+                Toast.makeText(this, "DeepSeek 登录态已失效，请重新登录", Toast.LENGTH_LONG).show();
+            });
+        }
+    }
+
+    private BalanceView.Balance requestConsoleBalance(String cookie) {
+        String[] endpoints = {
+                "https://platform.deepseek.com/api/v0/users/current",
+                "https://platform.deepseek.com/api/v0/users/settings",
+                "https://platform.deepseek.com/api/v0/users/get_user_summary",
+                "https://platform.deepseek.com/api/users/current",
+                "https://platform.deepseek.com/api/users/settings",
+                "https://platform.deepseek.com/api/users/get_user_summary"
+        };
+        ConsoleBalance result = new ConsoleBalance();
+        for (String endpoint : endpoints) {
+            try {
+                String body = requestConsoleJson(endpoint, cookie);
+                if (!body.isEmpty() && body.trim().startsWith("{")) {
+                    parseConsoleBalanceObject(new JSONObject(body), result);
+                } else if (!body.isEmpty() && body.trim().startsWith("[")) {
+                    parseConsoleBalanceArray(new JSONArray(body), result);
+                }
+                if (result.hasData()) {
+                    return new BalanceView.Balance(result.available, "CNY",
+                            result.total, result.toppedUp, result.granted);
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     private void requestConsoleUsage(String cookie) {
         try {
             UsageAccumulator usage = new UsageAccumulator();
@@ -386,7 +538,6 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                     } else if (!body.isEmpty() && body.trim().startsWith("[")) {
                         parseUsageArray(new JSONArray(body), usage, "");
                     }
-                    if (usage.hasData()) break;
                 } catch (Exception ignored) {}
             }
             if (usage.hasData()) {
@@ -424,6 +575,42 @@ public class MainActivity extends Activity implements BalanceView.Actions {
             Object item = array.get(i);
             if (item instanceof JSONObject) parseUsageObject((JSONObject) item, usage, inheritedModel);
             else if (item instanceof JSONArray) parseUsageArray((JSONArray) item, usage, inheritedModel);
+        }
+    }
+
+    private void parseConsoleBalanceArray(JSONArray array, ConsoleBalance balance) throws Exception {
+        for (int i = 0; i < array.length(); i++) {
+            Object item = array.get(i);
+            if (item instanceof JSONObject) parseConsoleBalanceObject((JSONObject) item, balance);
+            else if (item instanceof JSONArray) parseConsoleBalanceArray((JSONArray) item, balance);
+        }
+    }
+
+    private void parseConsoleBalanceObject(JSONObject object, ConsoleBalance balance) throws Exception {
+        JSONArray names = object.names();
+        if (names == null) return;
+        for (int i = 0; i < names.length(); i++) {
+            String name = names.getString(i);
+            String lower = name.toLowerCase(Locale.US);
+            Object value = object.get(name);
+            if (value instanceof Boolean && lower.contains("available")) {
+                balance.available = (Boolean) value;
+            }
+            double number = numericValue(value);
+            if (number >= 0) {
+                if ((lower.contains("total") && lower.contains("balance"))
+                        || lower.equals("balance") || lower.equals("available_balance")) {
+                    balance.total = number;
+                    balance.hasTotal = true;
+                } else if (lower.contains("granted") || lower.contains("gift")) {
+                    balance.granted = number;
+                } else if (lower.contains("topped") || lower.contains("recharge")
+                        || lower.contains("charge_balance")) {
+                    balance.toppedUp = number;
+                }
+            }
+            if (value instanceof JSONObject) parseConsoleBalanceObject((JSONObject) value, balance);
+            else if (value instanceof JSONArray) parseConsoleBalanceArray((JSONArray) value, balance);
         }
     }
 
@@ -491,13 +678,18 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         double total = 0;
         for (String key : keys) {
             if (!object.has(key)) continue;
-            Object value = object.opt(key);
-            if (value instanceof Number) total += ((Number) value).doubleValue();
-            else if (value instanceof String) {
-                try { total += Double.parseDouble((String) value); } catch (Exception ignored) {}
-            }
+            double number = numericValue(object.opt(key));
+            if (number >= 0) total += number;
         }
         return total;
+    }
+
+    private double numericValue(Object value) {
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value instanceof String) {
+            try { return Double.parseDouble((String) value); } catch (Exception ignored) {}
+        }
+        return -1;
     }
 
     private static final class UsageAccumulator {
@@ -518,6 +710,18 @@ public class MainActivity extends Activity implements BalanceView.Actions {
 
         boolean hasData() {
             return proTokens > 0 || flashTokens > 0 || proCost > 0 || flashCost > 0;
+        }
+    }
+
+    private static final class ConsoleBalance {
+        boolean available = true;
+        boolean hasTotal;
+        double total;
+        double toppedUp;
+        double granted;
+
+        boolean hasData() {
+            return hasTotal || total > 0 || toppedUp > 0 || granted > 0;
         }
     }
 
