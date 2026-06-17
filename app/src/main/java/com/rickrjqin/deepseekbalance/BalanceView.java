@@ -161,21 +161,27 @@ public final class BalanceView extends View {
                 account.left + dp(16) + cardW, account.bottom - dp(14));
         RectF gift = new RectF(charge.right + gap, charge.top,
                 account.right - dp(16), charge.bottom);
-        miniCard(canvas, charge, "余额", balance == null ? "--" : money(balance.total, balance.currency),
+        miniCard(canvas, charge, "赠送额度", balance == null ? "--" : money(balance.granted, balance.currency),
                 Color.rgb(255, 203, 113));
         miniCard(canvas, gift, "月度用量",
                 balance == null ? "--" : money(monthlyUsage(), balance.currency),
                 Color.rgb(123, 224, 255));
 
+        UsageStats proUsage = usageStats("pro");
+        UsageStats flashUsage = usageStats("flash");
+        double maxModelTokens = Math.max(1, Math.max(proUsage.tokens, flashUsage.tokens));
+
         float proTop = account.bottom + dp(12);
         RectF pro = new RectF(x, proTop, right, proTop + dp(68));
-        modelCard(canvas, pro, "DeepSeek Pro", "等待统计数据", "-- Tokens",
-                .34f, Color.rgb(173, 77, 238), true);
+        modelCard(canvas, pro, "DeepSeek V4 Pro", money(proUsage.cost, "CNY"),
+                tokenText(proUsage.tokens), (float) (proUsage.tokens / maxModelTokens),
+                Color.rgb(173, 77, 238), true);
 
         float flashTop = pro.bottom + dp(10);
         RectF flash = new RectF(x, flashTop, right, flashTop + dp(68));
-        modelCard(canvas, flash, "DeepSeek Flash", "等待统计数据", "-- Tokens",
-                .78f, Color.rgb(65, 168, 255), false);
+        modelCard(canvas, flash, "DeepSeek V4 Flash", money(flashUsage.cost, "CNY"),
+                tokenText(flashUsage.tokens), (float) (flashUsage.tokens / maxModelTokens),
+                Color.rgb(65, 168, 255), false);
 
         float chartTop = flash.bottom + dp(12);
         RectF chart = new RectF(x, chartTop, right, shell.bottom - dp(24));
@@ -189,14 +195,14 @@ public final class BalanceView extends View {
         if (r.width() <= dp(80) || r.height() <= dp(90)) return;
         text(c, "▥  用量变化", r.left + dp(20), r.top + dp(36),
                 dp(18), WHITE, true, Paint.Align.LEFT);
-        text(c, "本机余额快照",
-                r.right - dp(18), r.top + dp(36), dp(13),
-                Color.argb(190, 235, 246, 255), false, Paint.Align.RIGHT);
-        float top = r.top + dp(62);
+        float top = r.top + dp(66);
         float bottom = r.bottom - dp(30);
         int count = 7;
         float gap = dp(9);
-        float usable = r.width() - dp(40);
+        float axisW = dp(34);
+        float leftBase = r.left + dp(20) + axisW;
+        float rightBase = r.right - dp(16);
+        float usable = rightBase - leftBase;
         float barW = (usable - gap * (count - 1)) / count;
         double max = .01;
         double[] changes = new double[count];
@@ -219,13 +225,23 @@ public final class BalanceView extends View {
             stroke.setColor(Color.argb(35, 255, 255, 255));
             stroke.setStrokeWidth(dp(1));
             float y = top + (bottom - top) * i / 3f;
-            c.drawLine(r.left + dp(20), y, r.right - dp(20), y, stroke);
+            c.drawLine(leftBase, y, rightBase, y, stroke);
         }
+        text(c, tokenAxisValue(max), r.left + dp(17), top + dp(4), dp(9),
+                Color.argb(180, 235, 246, 255), false, Paint.Align.LEFT);
+        text(c, tokenAxisValue(max / 2), r.left + dp(17), (top + bottom) / 2 + dp(4), dp(9),
+                Color.argb(160, 235, 246, 255), false, Paint.Align.LEFT);
+        text(c, "0", r.left + dp(17), bottom + dp(4), dp(9),
+                Color.argb(140, 235, 246, 255), false, Paint.Align.LEFT);
         for (int i = 0; i < count; i++) {
-            float left = r.left + dp(20) + i * (barW + gap);
+            float left = leftBase + i * (barW + gap);
             float barH = changes[i] == 0 ? dp(4)
                     : Math.max(dp(8), (float) (changes[i] / max) * (bottom - top));
             RectF bar = new RectF(left, bottom - barH, left + barW, bottom);
+            if (changes[i] > 0) {
+                text(c, tokenAxisValue(changes[i]), left + barW / 2, bar.top - dp(5),
+                        dp(8), Color.argb(210, 245, 250, 255), false, Paint.Align.CENTER);
+            }
             paint.setShader(new LinearGradient(0, bar.top, 0, bar.bottom,
                     Color.rgb(127, 208, 255), Color.rgb(55, 92, 238),
                     Shader.TileMode.CLAMP));
@@ -382,6 +398,33 @@ public final class BalanceView extends View {
         return symbol + String.format(Locale.US, "%,.2f", amount);
     }
 
+    private String tokenText(double tokens) {
+        if (tokens >= 1_000_000) return String.format(Locale.US, "%.1fM Tokens", tokens / 1_000_000d);
+        if (tokens >= 1_000) return String.format(Locale.US, "%.1fK Tokens", tokens / 1_000d);
+        return String.format(Locale.US, "%.0f Tokens", tokens);
+    }
+
+    private String chartValue(double value) {
+        if (value >= 1000) return String.format(Locale.US, "¥%.1fk", value / 1000d);
+        if (value >= 10) return String.format(Locale.US, "¥%.0f", value);
+        if (value > 0) return String.format(Locale.US, "¥%.2f", value);
+        return "¥0";
+    }
+
+    private String tokenAxisValue(double value) {
+        double tokens = value * 1_000_000d;
+        if (tokens >= 1_000_000) return String.format(Locale.US, "%.0fM", tokens / 1_000_000d);
+        if (tokens >= 1_000) return String.format(Locale.US, "%.0fK", tokens / 1_000d);
+        return String.format(Locale.US, "%.0f", tokens);
+    }
+
+    private UsageStats usageStats(String key) {
+        SharedPreferences prefs = getContext().getSharedPreferences("usage", Context.MODE_PRIVATE);
+        return new UsageStats(
+                prefs.getFloat(key + "_tokens", 0),
+                prefs.getFloat(key + "_cost", 0));
+    }
+
     private double monthlyUsage() {
         String monthPrefix = new SimpleDateFormat("M/", Locale.CHINA).format(new Date());
         double total = 0;
@@ -477,6 +520,16 @@ public final class BalanceView extends View {
         Snapshot(double value, String label) {
             this.value = value;
             this.label = label;
+        }
+    }
+
+    private static final class UsageStats {
+        final double tokens;
+        final double cost;
+
+        UsageStats(double tokens, double cost) {
+            this.tokens = tokens;
+            this.cost = cost;
         }
     }
 }

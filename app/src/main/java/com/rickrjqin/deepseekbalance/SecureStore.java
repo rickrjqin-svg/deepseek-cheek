@@ -21,20 +21,32 @@ final class SecureStore {
     private SecureStore() {}
 
     static void put(Context context, String value) throws Exception {
+        put(context, "key", value);
+    }
+
+    static void put(Context context, String name, String value) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key());
         byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .putString("key", Base64.encodeToString(encrypted, Base64.NO_WRAP))
-                .putString("iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                .putString(name, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putString(name + "_iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
                 .apply();
     }
 
     static String get(Context context) {
+        return get(context, "key");
+    }
+
+    static String get(Context context, String name) {
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            String encrypted = prefs.getString("key", "");
-            String iv = prefs.getString("iv", "");
+            String encrypted = prefs.getString(name, "");
+            String iv = prefs.getString(name + "_iv", "");
+            if (encrypted.isEmpty() && "key".equals(name)) {
+                encrypted = prefs.getString("key", "");
+                iv = prefs.getString("iv", "");
+            }
             if (encrypted.isEmpty() || iv.isEmpty()) return "";
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, key(),

@@ -42,7 +42,8 @@ body {
   content: ""; position: absolute; width: 58%; height: 48%; border-radius: 50%;
   background: #fff; transform: rotate(-8deg);
 }
-.whale { z-index: 1; color: #2777f5; font: 800 34px Georgia; }
+.app-icon::after, .small-icon::after { content: ""; position: absolute; right: 15%; top: 34%; width: 26%; height: 26%; background: #fff; clip-path: polygon(0 45%,100% 0,70% 48%,100% 100%); }
+.whale { position: relative; z-index: 1; width: 6px; height: 6px; border-radius: 50%; background: #2777f5; transform: translate(-14px,-3px); }
 .spark { position: absolute; z-index: 2; color: #73dcff; font-size: 24px; right: 16px; top: 11px; }
 
 .phone {
@@ -68,7 +69,7 @@ header { display: flex; align-items: center; justify-content: space-between; hei
 .brand { display: flex; align-items: center; gap: 11px; }
 .brand strong { font-size: 17px; letter-spacing: -.02em; }
 .small-icon { width: 39px; height: 39px; border-radius: 12px; }
-.small-icon b { z-index: 1; color: #2777f5; font: 800 18px Georgia; }
+.small-icon .whale { transform: translate(-6px,-1px) scale(.55); }
 .small-icon i { position: absolute; z-index: 2; right: 5px; top: 2px; color: #64d8ff; font-style: normal; font-size: 11px; }
 .actions { display: flex; gap: 2px; }
 .actions button { border: 0; background: transparent; color: #fff; font-size: 25px; width: 37px; height: 40px; cursor: pointer; transition: transform .25s; }
@@ -110,21 +111,24 @@ header { display: flex; align-items: center; justify-content: space-between; hei
 .chart-card { min-height: 0; flex: 1; border-radius: 23px; padding: 15px 16px 11px; display: flex; flex-direction: column; }
 .chart-title { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
 .chart-title span { color: #c5d9e3; font-size: 10px; }
-.chart { min-height: 0; flex: 1; display: flex; align-items: end; gap: 8px; padding-top: 20px; background: repeating-linear-gradient(to bottom, transparent 0 32%, #ffffff12 33% 34%); }
+.chart { min-height: 0; flex: 1; display: flex; align-items: end; gap: 8px; padding-top: 20px; padding-left: 24px; background: repeating-linear-gradient(to bottom, transparent 0 32%, #ffffff12 33% 34%); position: relative; }
+.axis { position: absolute; left: 0; top: 20px; bottom: 19px; width: 24px; display: flex; flex-direction: column; justify-content: space-between; align-items: start; }
+.axis b { color: #d8ebf3aa; font-size: 7px; font-weight: 500; }
 .chart > div { height: 100%; flex: 1; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 7px; }
 .chart em { color: #d8ebf3; font-size: 7px; font-style: normal; }
 .chart i { width: 100%; height: var(--h); min-height: 5px; border-radius: 7px 7px 4px 4px; background: linear-gradient(#86d4ff, #3158e8); box-shadow: inset 0 1px #fff9, 0 5px 12px #285df27a; animation: grow 1s cubic-bezier(.2,.9,.2,1) both; transform-origin: bottom; }
 .chart small { color: #e6f3f8; font-size: 9px; }
 @keyframes grow { from { transform: scaleY(0); } }
 .home-indicator { width: 118px; height: 4px; border-radius: 3px; background: #ffffffc9; align-self: center; margin: 1px 0 -10px; }
-.demo-note { position: absolute; right: 22px; bottom: 7px; color: #d5e7ee72; font-size: 8px; }
 
 dialog { width: min(340px, calc(100vw - 32px)); border: 1px solid #ffffff69; border-radius: 26px; color: #f7fbff; background: #16313be8; box-shadow: 0 28px 90px #000b; backdrop-filter: blur(30px); }
 dialog::backdrop { background: #02090db8; backdrop-filter: blur(8px); }
 dialog form { padding: 14px 10px 8px; text-align: center; }
 .dialog-icon { width: 48px; height: 48px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 15px; background: linear-gradient(145deg, #57d7f8, #256fe8); }
 dialog h2 { margin: 0; } dialog p { color: #b7cbd5; font-size: 13px; line-height: 1.5; }
-dialog input { width: 100%; border: 1px solid #ffffff38; border-radius: 13px; padding: 13px; color: white; outline: 0; background: #061b248f; }
+dialog input, dialog textarea { width: 100%; border: 1px solid #ffffff38; border-radius: 13px; padding: 13px; color: white; outline: 0; background: #061b248f; }
+dialog textarea { min-height: 62px; resize: vertical; font: inherit; font-size: 12px; }
+.cookie-label { display: block; margin: 12px 0 6px; text-align: left; color: #bcd0da; font-size: 12px; }
 dialog fieldset { margin: 14px 0 0; padding: 10px 12px 12px; text-align: left; border: 1px solid #ffffff27; border-radius: 14px; }
 dialog legend { padding: 0 6px; color: #bcd0da; font-size: 12px; }
 dialog label { display: flex; align-items: center; gap: 8px; padding: 7px 0; color: #e9f4f8; font-size: 13px; cursor: pointer; }
