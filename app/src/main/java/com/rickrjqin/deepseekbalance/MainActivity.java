@@ -260,7 +260,10 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 return;
             }
             try {
-                if (!key.isEmpty()) SecureStore.put(this, key);
+                if (!key.isEmpty()) {
+                    SecureStore.put(this, key);
+                    SecureStore.put(this, "platform_cookie", "");
+                }
                 RadioButton selected = intervals.findViewById(
                         intervals.getCheckedRadioButtonId());
                 long interval = selected == null ? 0 : (long) selected.getTag();
@@ -447,8 +450,6 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 view.setLoading(false);
                 requestInFlight = false;
             });
-            String cookie = SecureStore.get(this, "platform_cookie");
-            if (!cookie.isEmpty()) runOnUiThread(this::requestConsoleViaWebView);
         } catch (Exception e) {
             String message = e.getMessage() == null ? "网络连接失败" : e.getMessage();
             runOnUiThread(() -> {
