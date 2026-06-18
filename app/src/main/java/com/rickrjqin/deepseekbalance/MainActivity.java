@@ -39,12 +39,15 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements BalanceView.Actions {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private BalanceView view;
     private boolean requestInFlight;
+    private String lastConsoleDebug = "";
     private final Runnable scheduledRefresh = new Runnable() {
         @Override
         public void run() {
@@ -88,6 +91,12 @@ public class MainActivity extends Activity implements BalanceView.Actions {
     @Override
     public void settings() {
         showKeyDialog();
+    }
+
+    private void showDebugIfAvailable() {
+        if (!lastConsoleDebug.isEmpty()) {
+            Toast.makeText(this, lastConsoleDebug, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showKeyDialog() {
@@ -145,7 +154,6 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         input.setPadding(dp(14), 0, dp(14), 0);
         input.setBackground(roundBackground(Color.rgb(8, 37, 48),
                 Color.rgb(54, 91, 104), dp(13), 1));
-        input.setVisibility(EditText.GONE);
         content.addView(input, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
@@ -475,7 +483,11 @@ public class MainActivity extends Activity implements BalanceView.Actions {
     }
 
     private void requestConsoleViaWebView() {
+        requestInFlight = true;
+        view.setLoading(true);
         WebView webView = new WebView(this);
+        webView.setAlpha(0f);
+        addContentView(webView, new ViewGroup.LayoutParams(1, 1));
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.getSettings().setJavaScriptEnabled(true);
@@ -495,7 +507,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
             if (!completed[0]) {
                 completed[0] = true;
                 finishConsoleFetch(null, null, "DeepSeek 登录页加载超时，请重新登录");
-                webView.destroy();
+                destroyProbeWebView(webView);
             }
         }, 18000);
         webView.loadUrl("https://platform.deepseek.com/usage");
@@ -530,6 +542,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 + "const r=await fetch(u,{credentials:'include',headers:{accept:'application/json, text/plain, */*'}});"
                 + "out.push({url:u,status:r.status,text:await r.text()});"
                 + "}catch(e){out.push({url:u,error:String(e)});}}"
+                + "out.push({url:'__page_text__',status:200,text:document.body?document.body.innerText:''});"
                 + "DeepSeekBridge.post(JSON.stringify(out));"
                 + "})().catch(e=>DeepSeekBridge.post(JSON.stringify([{error:String(e)}])));";
     }
@@ -551,10 +564,21 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 try {
                     handleConsolePayload(raw);
                 } finally {
-                    webView.destroy();
+                    destroyProbeWebView(webView);
                 }
             });
         }
+    }
+
+    private void destroyProbeWebView(WebView webView) {
+        try {
+            if (webView.getParent() instanceof ViewGroup) {
+                ((ViewGroup) webView.getParent()).removeView(webView);
+            }
+        } catch (Exception ignored) {}
+        try {
+            webView.destroy();
+        } catch (Exception ignored) {}
     }
 
     private void handleConsolePayload(String raw) {
@@ -567,6 +591,10 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 if (response == null || response.optInt("status", 0) < 200
                         || response.optInt("status", 0) >= 300) continue;
                 String body = response.optString("text", "").trim();
+                if ("__page_text__".equals(response.optString("url"))) {
+                    parseConsolePageText(body, usage, consoleBalance);
+                    continue;
+                }
                 if (body.startsWith("{")) {
                     JSONObject object = new JSONObject(body);
                     parseUsageObject(object, usage, "");
@@ -750,6 +778,66 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         }
     }
 
+    private void parseConsolePageText(String text, UsageAccumulator usage, ConsoleBalance balance) {
+        if (text == null || text.trim().isEmpty()) return;
+        String[] lines = text.split("\\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.contains("充值余额")) {
+                double cny = nextCurrencyValue(lines, i, "¥", 8);
+                if (cny >= 0) {
+                    balance.total = cny;
+                    balance.toppedUp = cny;
+                    balance.hasTotal = true;
+                    balance.available = true;
+                }
+            } else if (line.contains("消费") && line.contains("月")) {
+                double cny = nextCurrencyValue(lines, i, "¥", 10);
+                if (cny > 0) usage.monthCost = cny;
+            } else if (line.toLowerCase(Locale.US).contains("deepseek-v4-pro")) {
+                usage.proTokens += nextTokenValue(lines, i, 12);
+            } else if (line.toLowerCase(Locale.US).contains("deepseek-v4-flash")) {
+                usage.flashTokens += nextTokenValue(lines, i, 12);
+            }
+        }
+        if (usage.monthCost > 0) {
+            if (usage.proTokens > 0 && usage.flashTokens <= 0) usage.proCost += usage.monthCost;
+            else if (usage.flashTokens > 0 && usage.proTokens <= 0) usage.flashCost += usage.monthCost;
+        }
+    }
+
+    private double nextCurrencyValue(String[] lines, int start, String symbol, int limit) {
+        for (int i = start; i < Math.min(lines.length, start + limit); i++) {
+            String line = lines[i].trim();
+            if (!line.startsWith(symbol)) continue;
+            double value = parseNumber(line.substring(symbol.length()));
+            if (value >= 0) return value;
+        }
+        return -1;
+    }
+
+    private double nextTokenValue(String[] lines, int start, int limit) {
+        for (int i = start; i < Math.min(lines.length, start + limit); i++) {
+            if (!lines[i].trim().equalsIgnoreCase("Tokens")) continue;
+            for (int j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+                double value = parseNumber(lines[j]);
+                if (value > 0) return value;
+            }
+        }
+        return 0;
+    }
+
+    private double parseNumber(String raw) {
+        if (raw == null) return -1;
+        Matcher matcher = Pattern.compile("([0-9][0-9,]*(?:\\.[0-9]+)?)").matcher(raw);
+        if (!matcher.find()) return -1;
+        try {
+            return Double.parseDouble(matcher.group(1).replace(",", ""));
+        } catch (Exception ignored) {
+            return -1;
+        }
+    }
+
     private void parseUsageObject(JSONObject object, UsageAccumulator usage, String inheritedModel) throws Exception {
         String model = inheritedModel;
         JSONArray names = object.names();
@@ -833,6 +921,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         double proCost;
         double flashTokens;
         double flashCost;
+        double monthCost;
 
         void add(String model, double tokens, double cost) {
             if ("pro".equals(model)) {
