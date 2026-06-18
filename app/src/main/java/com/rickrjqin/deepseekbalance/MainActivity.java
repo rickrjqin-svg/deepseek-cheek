@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -78,7 +79,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
         requestInFlight = true;
         view.setLoading(true);
         if (key.isEmpty()) {
-            executor.execute(() -> requestConsoleOnly(cookie));
+            requestConsoleViaWebView();
         } else {
             executor.execute(() -> requestBalance(key));
         }
@@ -439,7 +440,7 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 requestInFlight = false;
             });
             String cookie = SecureStore.get(this, "platform_cookie");
-            if (!cookie.isEmpty()) requestConsoleUsage(cookie);
+            if (!cookie.isEmpty()) runOnUiThread(this::requestConsoleViaWebView);
         } catch (Exception e) {
             String message = e.getMessage() == null ? "网络连接失败" : e.getMessage();
             runOnUiThread(() -> {
@@ -471,6 +472,141 @@ public class MainActivity extends Activity implements BalanceView.Actions {
                 Toast.makeText(this, "DeepSeek 登录态已失效，请重新登录", Toast.LENGTH_LONG).show();
             });
         }
+    }
+
+    private void requestConsoleViaWebView() {
+        WebView webView = new WebView(this);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        final boolean[] started = {false};
+        final boolean[] completed = {false};
+        webView.addJavascriptInterface(new ConsoleBridge(webView, completed), "DeepSeekBridge");
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (started[0] || completed[0]) return;
+                started[0] = true;
+                view.evaluateJavascript(consoleFetchScript(), null);
+            }
+        });
+        refreshHandler.postDelayed(() -> {
+            if (!completed[0]) {
+                completed[0] = true;
+                finishConsoleFetch(null, null, "DeepSeek 登录页加载超时，请重新登录");
+                webView.destroy();
+            }
+        }, 18000);
+        webView.loadUrl("https://platform.deepseek.com/usage");
+    }
+
+    private String consoleFetchScript() {
+        String month = new SimpleDateFormat("M", Locale.US).format(new Date());
+        String year = new SimpleDateFormat("yyyy", Locale.US).format(new Date());
+        return "(async()=>{"
+                + "const urls=["
+                + "'/api/v0/usage/amount?month=" + month + "&year=" + year + "',"
+                + "'/api/v0/usage/cost?month=" + month + "&year=" + year + "',"
+                + "'/api/v0/usage/current',"
+                + "'/api/v0/users/current',"
+                + "'/api/v0/users/settings',"
+                + "'/api/v0/users/get_user_summary',"
+                + "'/api/usage/amount?month=" + month + "&year=" + year + "',"
+                + "'/api/usage/cost?month=" + month + "&year=" + year + "',"
+                + "'/api/usage/current',"
+                + "'/api/users/current',"
+                + "'/api/users/settings',"
+                + "'/api/users/get_user_summary',"
+                + "'/usage/amount?month=" + month + "&year=" + year + "',"
+                + "'/usage/cost?month=" + month + "&year=" + year + "',"
+                + "'/amount?month=" + month + "&year=" + year + "',"
+                + "'/cost?month=" + month + "&year=" + year + "',"
+                + "'/current',"
+                + "'/get_user_summary'"
+                + "];"
+                + "const out=[];"
+                + "for(const u of urls){try{"
+                + "const r=await fetch(u,{credentials:'include',headers:{accept:'application/json, text/plain, */*'}});"
+                + "out.push({url:u,status:r.status,text:await r.text()});"
+                + "}catch(e){out.push({url:u,error:String(e)});}}"
+                + "DeepSeekBridge.post(JSON.stringify(out));"
+                + "})().catch(e=>DeepSeekBridge.post(JSON.stringify([{error:String(e)}])));";
+    }
+
+    private final class ConsoleBridge {
+        private final WebView webView;
+        private final boolean[] completed;
+
+        ConsoleBridge(WebView webView, boolean[] completed) {
+            this.webView = webView;
+            this.completed = completed;
+        }
+
+        @JavascriptInterface
+        public void post(String raw) {
+            runOnUiThread(() -> {
+                if (completed[0]) return;
+                completed[0] = true;
+                try {
+                    handleConsolePayload(raw);
+                } finally {
+                    webView.destroy();
+                }
+            });
+        }
+    }
+
+    private void handleConsolePayload(String raw) {
+        UsageAccumulator usage = new UsageAccumulator();
+        ConsoleBalance consoleBalance = new ConsoleBalance();
+        try {
+            JSONArray responses = new JSONArray(raw == null ? "[]" : raw);
+            for (int i = 0; i < responses.length(); i++) {
+                JSONObject response = responses.optJSONObject(i);
+                if (response == null || response.optInt("status", 0) < 200
+                        || response.optInt("status", 0) >= 300) continue;
+                String body = response.optString("text", "").trim();
+                if (body.startsWith("{")) {
+                    JSONObject object = new JSONObject(body);
+                    parseUsageObject(object, usage, "");
+                    parseConsoleBalanceObject(object, consoleBalance);
+                } else if (body.startsWith("[")) {
+                    JSONArray array = new JSONArray(body);
+                    parseUsageArray(array, usage, "");
+                    parseConsoleBalanceArray(array, consoleBalance);
+                }
+            }
+        } catch (Exception ignored) {}
+        finishConsoleFetch(usage, consoleBalance, null);
+    }
+
+    private void finishConsoleFetch(UsageAccumulator usage, ConsoleBalance consoleBalance, String errorMessage) {
+        if (usage != null && usage.hasData()) {
+            getSharedPreferences("usage", MODE_PRIVATE).edit()
+                    .putFloat("pro_tokens", (float) usage.proTokens)
+                    .putFloat("pro_cost", (float) usage.proCost)
+                    .putFloat("flash_tokens", (float) usage.flashTokens)
+                    .putFloat("flash_cost", (float) usage.flashCost)
+                    .apply();
+        }
+        if (consoleBalance != null && consoleBalance.hasData()) {
+            view.setBalance(new BalanceView.Balance(consoleBalance.available, "CNY",
+                    consoleBalance.total, consoleBalance.toppedUp, consoleBalance.granted));
+        }
+        if ((usage == null || !usage.hasData())
+                && (consoleBalance == null || !consoleBalance.hasData())
+                && errorMessage != null) {
+            view.setError(errorMessage);
+            Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+        } else if ((usage == null || !usage.hasData())
+                && (consoleBalance == null || !consoleBalance.hasData())) {
+            view.setError("未读取到 DeepSeek 控制台数据，请确认已完成登录");
+            Toast.makeText(this, "未读取到 DeepSeek 控制台数据，请确认已完成登录", Toast.LENGTH_LONG).show();
+        }
+        view.setLoading(false);
+        requestInFlight = false;
+        view.invalidate();
     }
 
     private BalanceView.Balance requestConsoleBalance(String cookie) {
@@ -728,7 +864,8 @@ public class MainActivity extends Activity implements BalanceView.Actions {
     private void scheduleNextRefresh() {
         refreshHandler.removeCallbacks(scheduledRefresh);
         long interval = getPreferences(MODE_PRIVATE).getLong("refresh_interval", 0);
-        if (interval > 0 && !SecureStore.get(this).isEmpty()) {
+        if (interval > 0 && (!SecureStore.get(this).isEmpty()
+                || !SecureStore.get(this, "platform_cookie").isEmpty())) {
             refreshHandler.postDelayed(scheduledRefresh, interval);
         }
     }
